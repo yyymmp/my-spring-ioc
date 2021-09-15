@@ -1,9 +1,10 @@
-package com.myspring.spring.entity;
+package com.myspring.sourceCodeTest;
 
-import com.myspring.customSpring.Component;
-import com.myspring.customSpring.Value;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * @author clearlove
@@ -12,8 +13,7 @@ import lombok.Data;
  * @createTime 2021年09月06日 21:56:00
  */
 @Data
-@AllArgsConstructor
-@Component("myOrder")
+@Component
 public class Order {
 
     @Value("123")

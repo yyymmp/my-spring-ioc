@@ -1,3 +1,5 @@
+### 手写springIoc原理与Aop实现原理
+
 #### Ioc的思想
 
 在不使用spring的情况下, 在servlet中使用service时,需要在程序中控制对象创建
@@ -296,4 +298,218 @@ try {
         }
     }
 ```
+
+
+
+#### Spring 实现控制反转ioc的大概思路:
+
+首先,传入配置类或者xml配置文件,这里以配置类为例,配置类上面配置了要扫描的包compontScan,所以得到该包名,扫描该包下的所有.class文件, 
+
+通过**应用类加载器**加载加载得到class对象,然后构造出beanDefintion对象,里面可简单**描述bean的定义**,如scope,是否单例还是原型,class对象,一个beanDefintion就是对一个bean的定义描述,
+
+然后将这些beanDefintion存入一个容器map,其中key为beanName,value就是class对象, 一直至扫描结束,得到一个对bean的描述的map集合
+
+容器启动时,单例bean需要全部创建好,所以需要准备一个单例池map(String,Object),遍历第一步得到的beanDefintions容器,看看哪个bean是单例,单例是则创建该bean(通过class对象)并放入单例池map中,在getBean时直接取出容器中已存在的bean即可,
+
+如果不是单例模式,则getBean时,会使用beanDefintion中的类描述信息class对象创建该bean对象
+
+对于依赖注入,通过class对象拿到字段,找到被目标注解(如Autowired)修饰的字段,通过反射调用set方法设置属性的值
+
+**对于spring的```aware```接口**,其实当通过反射实例化该对象时,判断该对象是否实现```aware```接口,如果实现了,则调用该方法,但是该方法的具体执行还是程序员自己定义
+
+```java
+   public void setBeanName(String beanName) {
+        //ID保存BeanName的值	
+        id=beanName;
+    }
+```
+
+**对于spring的```InitializingBean```接口**,同样的道理,在实例化得到对象后,判断该对象是否实现了该接口,如果实现了,则调用该方法afterPropertiesSet.而方法具体内容是又程序员定义的,spring只是会调用该方法
+
+```java
+    public void afterPropertiesSet() throws Exception {
+        System.out.println("ceshi InitializingBean");        
+    }
+```
+
+**对于spring的```BeanPostProcessor ```接口**,bean的后置处理器,也是在实例化之后,初始化之前和初始化,并且这不是针对单个bean而言的,而是**所有**的bean都会调用此接口方法,并且可以定义多个这样的接口实现,**可以在方法内部判断当前bean的类型再各自进行具体的操作**
+
+```java
+public interface BeanPostProcessor {
+    //初始化前
+    @Nullable
+    default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        return bean;
+    }
+	
+    //初始化后
+    @Nullable
+    default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        return bean;
+    }
+}
+
+```
+
+#### springAop实现
+
+springAop实现,也是利用BeanPostProcessor实现的,在初始化后方法(创建bean最后一个过程)中,使用动态代理为传进来的bean对象创建代理类,然后spring在getBean的时候,其实获取的是该代理对象,在执行方法时,先执行代理类的逻辑,再执行真实bean方法
+
+### spring经典面试题源码详解
+
+#### bean的生命周期
+
+bean创建的生命周期:
+
+class对象(A.class)------->推断构造方法(存在多个构造方法时)--->实例化-->对象
+
+---->属性填充(依赖注入)
+
+----->初始化(afterPropertiesSet方法,属性填充之后执行),不关心该方法具体内容,只是调用,具体逻辑由程序员决定,通常可以用来验证填充的属性是否符合要求
+
+----->aop
+
+---->Bean对象
+
+源码流程：
+
+核心方法：doCreateBean
+
+```java
+	protected Object doCreateBean(String beanName, RootBeanDefinition mbd, @Nullable Object[] args)
+			throws BeanCreationException {
+
+		// Instantiate the bean.
+		BeanWrapper instanceWrapper = null;
+		if (mbd.isSingleton()) {
+			instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
+		}
+		if (instanceWrapper == null) {
+			instanceWrapper = createBeanInstance(beanName, mbd, args);
+		}
+         //这里实例化bean对象 此时对象的属性均为null
+		Object bean = instanceWrapper.getWrappedInstance();
+		Class<?> beanType = instanceWrapper.getWrappedClass();
+		if (beanType != NullBean.class) {
+			mbd.resolvedTargetType = beanType;
+		}
+        //省去中间代码
+        Object exposedObject = bean;
+		try {
+             //填充属性  实现autowired功能
+			populateBean(beanName, mbd, instanceWrapper);
+             //执行初始化方法  和 beanPostPrecessor 正常aop 
+			exposedObject = initializeBean(beanName, exposedObject, mbd);
+		}
+```
+
+initializeBean方法：
+
+```java
+protected Object initializeBean(String beanName, Object bean, @Nullable RootBeanDefinition mbd) {
+   if (System.getSecurityManager() != null) {
+      AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
+         invokeAwareMethods(beanName, bean);
+         return null;
+      }, getAccessControlContext());
+   }
+   else {
+      //执行Aware接口方法
+      invokeAwareMethods(beanName, bean);
+   }
+
+   Object wrappedBean = bean;
+   if (mbd == null || !mbd.isSynthetic()) {
+       //初始化前
+      wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+   }
+
+   try {
+       
+      //初始化方法  判断是否实现初始化接口然后实现afterPropertiesSet 该方法内部调用afterPropertiesSet方法  ((InitializingBean) bean).afterPropertiesSet();
+      invokeInitMethods(beanName, wrappedBean, mbd);
+   }
+   catch (Throwable ex) {
+      throw new BeanCreationException(
+            (mbd != null ? mbd.getResourceDescription() : null),
+            beanName, "Invocation of init method failed", ex);
+   }
+   if (mbd == null || !mbd.isSynthetic()) {
+       
+      //初始化后 aop入口  判断是否需要进行aop 若需要aop 则返回代理对象 若不需要 则直接返回当前创建的bean对象
+      wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
+   }
+
+   return wrappedBean;
+}
+```
+
+进行aop的方法实现：找出所有切面，检查当前对象是否有切点符合，如果有，则需要进行aop，生成代理对象
+
+```java
+/**
+ * Create a proxy with the configured interceptors if the bean is
+ * identified as one to proxy by the subclass.
+ * @see #getAdvicesAndAdvisorsForBean
+ */
+@Override
+public Object postProcessAfterInitialization(@Nullable Object bean, String beanName) {
+   if (bean != null) {
+      Object cacheKey = getCacheKey(bean.getClass(), beanName);
+      if (this.earlyProxyReferences.remove(cacheKey) != bean) {
+          //wrapIfNecessary： 是否需要进行aop
+         return wrapIfNecessary(bean, beanName, cacheKey);
+      }
+   }
+   return bean;
+}
+```
+
+wrapIfNecessary：方法：
+
+```java
+protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+   if (StringUtils.hasLength(beanName) && this.targetSourcedBeans.contains(beanName)) {
+      return bean;
+   }
+   if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+      return bean;
+   }
+   if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+      this.advisedBeans.put(cacheKey, Boolean.FALSE);
+      return bean;
+   }
+
+   // Create proxy if we have advice.
+   //获取当前对象的切点切面
+   Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+   if (specificInterceptors != DO_NOT_PROXY) {
+      this.advisedBeans.put(cacheKey, Boolean.TRUE);
+       //创建代理对象  jdk或cglib 
+      Object proxy = createProxy(
+            bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+      this.proxyTypes.put(cacheKey, proxy.getClass());
+      return proxy;
+   }
+
+   this.advisedBeans.put(cacheKey, Boolean.FALSE);
+   return bean;
+}
+```
+
+cjlib(通过继承生成子类方式)生成代理对象：生成目标类的子类，重写目标类的方法，在目标类的执行前后进行一些逻辑操作
+
+补充spring知识:在spring获取bean的时候,是通过byType和byName的方式来确定bean对象的,一个同一个beanname可能对应多个类型的bean对象,而一个类型的bean对象对应多个name,因为容器中注入了多个该对象实例,所以根据类型和名称来确定
+
+```java
+Account account = applicationContext.getBean("account");
+```
+
+#### sping事务传播级别
+
+
+
+
+
+
 
