@@ -1,3 +1,11 @@
+面试答题技巧:
+
+总:当前问题要回答的具体的点
+
+分:1,2,3,4 不清楚的忽略过去,突出一些技术名词(核心概念,接口,类,关键方法)
+
+
+
 ### 手写springIoc原理与Aop实现原理
 
 #### Ioc的思想
@@ -505,9 +513,191 @@ cjlib(通过继承生成子类方式)生成代理对象：生成目标类的子�
 Account account = applicationContext.getBean("account");
 ```
 
+#### BeanFactory是什么
+
+**访问 Spring bean 容器的根接口**, BeanFactory是接口，提供了OC容器最基本的形式，给具体的IOC容器的实现提供了规范,**ApplicationContext**也是由BeanFactory派生而来
+
+详解:BeanFactory，以Factory结尾，表示它是一个工厂类(接口)， **它负责生产和管理bean的一个工厂**。在Spring中，**BeanFactory是IOC容器的核心接口，它的职责包括：实例化、定位、配置应用程序中的对象及建立这些对象间的依赖。BeanFactory只是个接口，并不是IOC容器的具体实现，但是Spring容器给出了很多种实现，如 DefaultListableBeanFactory、XmlBeanFactory、ApplicationContext等，其中****XmlBeanFactory就是常用的一个，该实现将以XML方式描述组成应用的对象及对象间的依赖关系**。**
+
+**BeanFactory和ApplicationContext就是spring框架的两个IOC容器，现在一般使用ApplicationnContext，其不但包含了BeanFactory的作用，同时还进行更多的扩展,BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory**
+
+#### 循环依赖如何解决
+
+关键词: 三级缓存,提前暴露对象,aop(总)
+
+什么是循环依赖问题: a b相互依赖
+
+说明bean的创建过程,a属性填充时找b,找不到则创建b,创建b时属性填充a,找不到a则创建a,进入循环,形成闭关,在创建b寻找a时,会发现a对象是存在的,但是此时a对象不是一个完整的状态,只是进行了实例化而未进行初始化,所以可以将一个非完整状态优先赋值,等待后续操作完成赋值,相当于提前暴露了某个不完整对象的引用,使得实例化和初始化分开操作,这也是解决循环依赖问题的关键,当所有对象都完成后,还要把对象放入到容器中,此时容器存在对象的几个状态:1已完成实例化但未初始化状态 2完整状态对象,所以使用不同的map容器来储存,一级缓存对应完整状态和二级缓存对应未初始化状态,
+
+为什么需要三级缓存,三级缓存的类型是ObjectFactory是一个函数式接口,存在的意义是整个容器的运行过程中同名bean对象只能有一个,Spring在bean实例化后，将原始bean放入第三级缓存singletonFactories中，第三级缓存里实际存入的是ObjectFactory接口签名的回调实现。那么如果有动态代理的需求，里面可以埋点进行处理，提前曝光的是ObjectFactory对象，在被注入时才在ObjectFactory方式内实时生成代理对象，并将生成好的代理对象放入到二级缓存earlySingletonObjects中。将原始bean包装后返回。通过第三级缓存我们可以拿到可能经过包装的对象，解决对象代理封装的问题。
+
+当一个对象需要被代理时,那么需要在使用之前使用代理对象覆盖掉容器中的原对象,所以当对象在调用时,传入lambda表达式来执行对对象的覆盖过程,因此,所有的bean对象都放在三级缓存中,在后续的使用过程中,如果需要被代理对象,如果不需要,则返回普通对象
+
+在实际使用中，要获取一个bean，先从一级缓存一直查找到三级缓存，缓存bean的时候是从三级到一级的顺序保存，并且缓存bean的过程中，三个缓存都是互斥的，只会保持bean在一个缓存中，而且，最终都会在一级缓存中。
+
+
+
 #### sping事务传播级别
 
+```java
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-tx</artifactId>
+      <version>5.3.8</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-jdbc</artifactId>
+      <version>5.3.8</version>
+    </dependency>
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.11</version>
+    </dependency>
+```
 
+插入后抛出异常:
+
+实例1:
+
+```java
+@Transactional
+public void test() {
+    jdbcTemplate.execute("insert into age value(1,2)");
+    System.out.println("test");
+    throw new NullPointerException();  //会导致上方事务回滚
+}
+```
+
+实例2(重要):
+
+```java
+    @Transactional
+    public void test() {
+        jdbcTemplate.execute("insert into age value(1,2)");
+        System.out.println("test");
+        a();
+
+    }
+
+    // Propagation.NEVER 调用a方法前已存在一个事务 则抛出异常
+    @Transactional(propagation = Propagation.NEVER)
+    public void a() {
+    }
+```
+
+测试代码:调用test方法:
+
+```java
+        Account account = applicationContext.getBean("account", Account.class);
+        account.test();
+```
+
+在这里并没有意料的报错,a()方法上面的注解没有生效,并且a()方法上不管使用什么隔离级别都是失效的
+
+原理分析:在从spring中获取account对象时,因为有事务,所以获取的是一个代理对象,所以执行test方法时,是代理对象去执行的,使用aop在test执行前创建了数据库连接等等,但是test的方法本身代理对象中的真实对象(target)执行的,a()方法同理,a()方法是真实对象去执行的, 不是代理对象执行的,自然没有aop,a()方法的注解都是无效的
+
+这种问题的解决方案:
+
+```java
+@Component
+public class Account {
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    //从spring中将自己注入 但此时是spring创建bean之后的代理对象 代理对象调用a方法时,a()方法上面的注解就会生效了
+    @Autowired
+    private Account account;
+    
+    @Transactional
+    public void test() {
+        jdbcTemplate.execute("insert into age value(1,2)");
+        System.out.println("test");
+        //使用注入的代理对象调用
+        account.a();
+
+    }
+
+    // Propagation.NEVER 调用a方法前已存在一个事务 则抛出异常
+    @Transactional(propagation = Propagation.NEVER)
+    public void a() {
+    }
+}
+```
+
+实例3(重要):
+
+```java
+public void test() {
+    //使用自身调用
+    a();
+}
+
+    @Transactional
+    public void a() {
+        jdbcTemplate.execute("insert into age value(2,2)");
+        throw new NullPointerException();
+    }
+}
+```
+
+在没有事务注解的test方法中调用a()方法,a方法上面的事务是不生效的,同理.因为是target(真实对象)调用的test方法,而不是代理对象调用的该方发,此时的执行结果是该语句会被插入,然后后面抛出异常
+
+实例4(重要):
+
+```java
+    @Transactional
+    public void test() {
+        jdbcTemplate.execute("insert into age value(1,2)");
+        //使用代理对象调用 保证事务有效
+        account.a();
+
+    }
+
+    // Propagation.NEVER 调用a方法前已存在一个事务 则重新创建一个事务
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void a() {
+        jdbcTemplate.execute("insert into age value(2,2)");
+//        System.out.println("a");
+        throw new NullPointerException();
+    }
+```
+
+在test方法中执行sql,调用a方法执行另外一个sql并抛出异常,最后谁会被执行?
+
+都被回滚,因为a方法在test中调用时,就是test方法中报错且没有捕获,所以test的事务也是回滚的
+
+实例4:(重要)
+
+```java
+@Transactional
+public void test() {
+    jdbcTemplate.execute("insert into age value(1,2)");
+    System.out.println("test");
+    account.a();
+    throw new NullPointerException();
+}
+
+// Propagation.NEVER 调用a方法前已存在一个事务 则重新创建一个事务
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void a() {
+    jdbcTemplate.execute("insert into age value(2,2)");
+}
+```
+
+这种情况,a方法中的事务是可以正确执行的,因为a方法中是单独一个事务,并且没有任何异常,test方法中的异常并不会影响到a方法的事务
+
+七种隔离级别:
+
+PROPAGATION_REQUIRED – 支持当前事务，如果当前没有事务，就新建一个事务。这是最常见的选择。
+PROPAGATION_SUPPORTS – 支持当前事务，如果当前没有事务，就以非事务方式执行。
+PROPAGATION_MANDATORY – 支持当前事务，如果当前没有事务，就抛出异常。
+PROPAGATION_REQUIRES_NEW – 新建事务，如果当前存在事务，把当前事务挂起。
+PROPAGATION_NOT_SUPPORTED – 以非事务方式执行操作，如果当前存在事务，就把当前事务挂起。
+PROPAGATION_NEVER – 以非事务方式执行，如果当前存在事务，则抛出异常。
+PROPAGATION_NESTED – 如果当前存在事务，则在嵌套事务内执行。如果当前没有事务，则进行与PROPAGATION_REQUIRED类似的操作。
 
 
 

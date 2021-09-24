@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * @createTime 2021年09月13日 23:50:00
  */
 @Aspect
-@Component
+//@Component
 public class MyAspect {
 
 //    @Before("com.myspring.sourceCodeTest.Account.test()")
