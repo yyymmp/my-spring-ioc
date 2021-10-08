@@ -513,13 +513,15 @@ cjlib(通过继承生成子类方式)生成代理对象：生成目标类的子�
 Account account = applicationContext.getBean("account");
 ```
 
-#### BeanFactory是什么
+#### BeanFactory是什么,和FactoryBean的区别是什么?
 
 **访问 Spring bean 容器的根接口**, BeanFactory是接口，提供了OC容器最基本的形式，给具体的IOC容器的实现提供了规范,**ApplicationContext**也是由BeanFactory派生而来
 
 详解:BeanFactory，以Factory结尾，表示它是一个工厂类(接口)， **它负责生产和管理bean的一个工厂**。在Spring中，**BeanFactory是IOC容器的核心接口，它的职责包括：实例化、定位、配置应用程序中的对象及建立这些对象间的依赖。BeanFactory只是个接口，并不是IOC容器的具体实现，但是Spring容器给出了很多种实现，如 DefaultListableBeanFactory、XmlBeanFactory、ApplicationContext等，其中****XmlBeanFactory就是常用的一个，该实现将以XML方式描述组成应用的对象及对象间的依赖关系**。**
 
 **BeanFactory和ApplicationContext就是spring框架的两个IOC容器，现在一般使用ApplicationnContext，其不但包含了BeanFactory的作用，同时还进行更多的扩展,BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory**
+
+而FactoryBean是一个bean,一个能生产或者修饰对象生成的工厂Bean,正常来说.spring产生一个对象过程是比较复杂的,所以提供了一个工厂bean接口,用户可以通过实现该接口定制实例化Bean的逻辑。
 
 #### 循环依赖如何解决
 
@@ -698,6 +700,53 @@ PROPAGATION_REQUIRES_NEW – 新建事务，如果当前存在事务，把当前
 PROPAGATION_NOT_SUPPORTED – 以非事务方式执行操作，如果当前存在事务，就把当前事务挂起。
 PROPAGATION_NEVER – 以非事务方式执行，如果当前存在事务，则抛出异常。
 PROPAGATION_NESTED – 如果当前存在事务，则在嵌套事务内执行。如果当前没有事务，则进行与PROPAGATION_REQUIRED类似的操作。
+
+#### spring中的设计模式
+
+- 单例模式:bean默认都是单例的
+
+- 原型模式:指定作用域是原型模式
+
+- 工厂模式:spring的BeanFactory
+
+- 工厂方法:FactoryBean接口,实现了FactoryBean接口的bean是一类叫做factory的bean。其特点是，spring会在使用getBean()调用获得该bean时，会自动调用该bean的getObject()方法，所以返回的不是factory这个bean，而是这个bean.getOjbect()方法的返回值。
+
+- 策略模式:在Spring中，我这里举的例子是Resource类，这是所有资源访问类所实现的接口。针对不同的访问资源的方式，Spring定义了不同的Resource类的实现类。
+
+  **UrlResource**：访问网络资源的实现类。
+
+  **ServletContextResource**：访问相对于 ServletContext 路径里的资源的实现类。
+
+  **ByteArrayResource**：访问字节数组资源的实现类。
+
+  **PathResource**：访问文件路径资源的实现类。
+
+  **ClassPathResource**：访问类加载路径里资源的实现类。
+
+- 代理模式:aop
+
+- 观察者模式:Listener  事件驱动
+
+- 适配器模式:Adapter
+- 责任链模式:在aop拦截时,方法前,方法后,方法返回这些拦截集合,体现的是一种责任链模式
+
+
+
+### springMvc
+
+#### 执行流程
+
+Servlet 容器首先接待了这个请求，并将该请求委托给 `DispatcherServlet` 进行处理。
+
+`DispatcherServlet` 将请求传给处理器映射器,找到对应的该请求的处理器对象和HandlerExecutionChain 拦截器
+
+但`DispatcherServlet` 并不是直接去掉该处理器处理请求,而是调用处理器适配器HandlerAdapter,让处理器适配器去执行具体的handler,并且处理器适配器需要进行一系列的操作包括表单数据的验证、数据类型的转换、将表单数据封装到 POJO 等，这一系列的操作后在具体handler执行业务方法之前
+
+并将返回的模型和输入交给前端控制器,再次交给试图解析器处理获取解析后的页面数据,最后返回给客户端
+
+#### 三组组件
+
+处理映射器,处理器适配器,视图解析器
 
 
 
