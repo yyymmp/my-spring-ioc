@@ -133,7 +133,7 @@ mysql会自动找到小的表作为驱动表
 
 explain第一条出现的表就是驱动表
 
-![1](img\1.jpg)
+![1](img/1.jpg)
 
 外键加索引
 
@@ -208,7 +208,7 @@ SQL线程负责读取relay log中的内容，解析成具体的操作并执行�
 
   两阶段提交,保证redolog和binlog日志数据恢复一致
 
-  ![2](img\2.jpg)
+  ![2](img/2.jpg)
 
   redo log容灾恢复过程: 判断 redo log 是否完整，如果判断是完整(commit)的，直接用 Redo log恢复,
 
