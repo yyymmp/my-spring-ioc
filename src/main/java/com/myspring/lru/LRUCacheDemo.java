@@ -106,7 +106,27 @@ public class LRUCacheDemo {
         return node.value;
     }
 
-    public void put(Node node) {
-
+    public void put(int key, int val) {
+        //是否存在
+        if (map.containsKey(key)) {
+            //更新map
+            Node<Integer, Integer> node = map.get(key);
+            node.value = val;
+            //更新list
+            doubleLinkList.remove(node);
+            doubleLinkList.addHead(node);
+        } else {
+            //坑位满了
+            if (map.size() == cacheSize) {
+                //删除最后一个
+                Node<Integer, Integer> last = doubleLinkList.getLast();
+                map.remove(last);
+                map.remove(last);
+            }
+            //加到map中 加入doubleLinkList中
+            final Node<Integer, Integer> newNode = new Node<>(key, val);
+            map.put(key, newNode);
+            doubleLinkList.addHead(newNode);
+        }
     }
 }
