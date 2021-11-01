@@ -744,11 +744,61 @@ Servlet 容器首先接待了这个请求，并将该请求委托给 `Dispatcher
 
 并将返回的模型和输入交给前端控制器,再次交给试图解析器处理获取解析后的页面数据,最后返回给客户端
 
-#### 三组组件
+#### 三大组件
 
 处理映射器,处理器适配器,视图解析器
 
 
 
+### springboot
 
+三大注解:
+
+```java
+@Configuration:配置类 
+@EnableAutoConfiguration:启用 SpringBoot 的自动配置机制
+@ComponentScan:扫描被@Component (@Service,@Controller)注解的 bean，注解默认会扫描该类所在的包下所有的类。
+```
+
+EnableAutoConfiguration 主要有
+
+```java
+@AutoConfigurationPackage
+@Import(AutoConfigurationImportSelector.class)
+```
+
+最核心的是里面导入的AutoConfigurationImportSelector,这个类有一个核心方法:
+
+```java
+/**
+ * 核心方法，加载spring.factories文件中的 
+ * org.springframework.boot.autoconfigure.EnableAutoConfiguration 配置类
+ */
+protected List<String> getCandidateConfigurations(AnnotationMetadata metadata,
+                                                  AnnotationAttributes attributes) {
+    List<String> configurations = SpringFactoriesLoader.loadFactoryNames(
+        EnableAutoConfiguration.class, getBeanClassLoader());
+    Assert.notEmpty(configurations,
+           "No auto configuration classes found in META-INF/spring.factories. If you "
+                    + "are using a custom packaging, make sure that file is correct.");
+    return configurations;
+}
+```
+
+spring-boot-autoconfigure.jar 包中的 META-INF/spring.factories 里面默认配置了很多aoto-configuration，如下
+
+```java
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.springframework.boot.autoconfigure.admin.SpringApplicationAdminJmxAutoConfiguration,\
+org.springframework.boot.autoconfigure.aop.AopAutoConfiguration,\
+org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration,\
+org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration,\
+org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration,\
+//省略其他
+```
+
+**总的来说，@EnableAutoConfiguration完成了一下功能：**
+
+**从classpath中搜寻所有的 META-INF/spring.factories 配置文件，并将其中org.springframework.boot.autoconfigure.EnableutoConfiguration 对应的配置项通过反射实例化为对应的标注了@Configuration的JavaConfig形式的IoC容器配置类，然后汇总为一个并加载到IoC容器。**
 
