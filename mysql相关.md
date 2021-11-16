@@ -2,6 +2,8 @@
 
 #### 范式与反范式
 
+**`原子性`**,**`唯一性`**,**`冗余性`**
+
 范式造成的辅助表太多,反范式使用一些冗余字段来避免过多的单表,易于管理
 
 反范式的缺点由于冗余数据的存在,所以在修改操作时,需要额外修改数据,更新从表
@@ -34,11 +36,29 @@ name为KEY，普通索引，叶子节点存储PK值，即id；
 
 复合条件的查询必须要包括左侧列
 
+#### 索引下推
+
+建立(name,age)联合索引,在查询时 ``` select * from table where name like "a%" and age > 15```  
+
+1.不适用索引下推的情况下,会先查出a开头的所有数据然后回表查出所有全部行数据,再筛选出符合年龄条件的数据,  
+
+2. 使用索引下推的情况先查出a开头的所有数据,然后直接筛选符合年龄条件的数据,再进行回表查询全行数据
+
 #### 超大分页优化:
 
 select * from table where age > 20 limit 1000000,10
 改为:
 select * from table where id in (select id from table where age > 20 limit 1000000,10)
+
+子查询 先插起始id 再拿id > 这个起始id
+
+select * from orders_history where type=8 and  id>=(select id from orders_history where type=8 limit 100000,1)  limit 100;
+
+利用id连续性:
+
+select * from table where id > 10000 limit 10
+
+
 
 ### 存储引擎篇
 

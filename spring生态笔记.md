@@ -178,7 +178,7 @@ public class Account {
         System.out.println(applicationContext.getBean("account"));
 ```
 
-j基于注解的指定原理:
+基于注解的指定原理:
 
 spring中含有扫描包的组件,找出带有目标注解的目标类, 将class和beanname封装成Beandefintions对象,然后根据Beandefintions动态创建对象放入到IOC容器(k,v)中
 
@@ -190,7 +190,7 @@ spring中含有扫描包的组件,找出带有目标注解的目标类, 将class
 
 2、获取这个包下的所有类。
 
-3、遍历这些类，找出添加了 @Component 注解的类，获取它的 Class 和对应的 beanName，封装成一个 BeanDefinition，存入集合 Set，这个机会就是 IoC 自动装载的原材料。
+3、遍历这些类，找出添加了 @Component 注解的类，获取它的 Class 和对应的 beanName，封装成一个 BeanDefinition，存入集合 Set，这个集合就是 IoC 自动装载的原材料。
 
 4、遍历 Set 集合，通过反射机制创建对象，同时检测属性有没有添加 @Value 注解，如果有还需要给属性赋值，再将这些动态创建的对象以 k-v 的形式存入缓存区。
 
@@ -359,6 +359,18 @@ public interface BeanPostProcessor {
 
 ```
 
+#### 为什么循环依赖解决不了构造方法注入
+
+循环依赖的解决主要依靠提前暴露的机制, 他是实例化对象,提前暴露放入三级缓存,属性赋值,  如果在实例化部分调用构造函数依然存在bean对象依赖,那还是会出现循环依赖问题
+
+#### 为什么jdk是基于接口,而cjlib是基于类的
+
+使用jdk实现时,被代理类和代理类都要实现相同的接口,使用jdk动态代理时,最终会创建一个子类,会生成一个$Proxy0,这个类本身就要继承Proxy类,由于java单继承多实现的的原因,所以jdk动态代理只能基于接口而不能基于类,将会有强制转化异常
+
+而cjlib是使用实现子类的方式,不需要代理对象接口,只需要能被继承就可以,借助于字节码技术
+
+
+
 #### springAop实现
 
 springAop实现,也是利用BeanPostProcessor实现的,在初始化后方法(创建bean最后一个过程)中,使用动态代理为传进来的bean对象创建代理类,然后spring在getBean的时候,其实获取的是该代理对象,在执行方法时,先执行代理类的逻辑,再执行真实bean方法
@@ -515,7 +527,7 @@ Account account = applicationContext.getBean("account");
 
 #### BeanFactory是什么,和FactoryBean的区别是什么?
 
-**访问 Spring bean 容器的根接口**, BeanFactory是接口，提供了OC容器最基本的形式，给具体的IOC容器的实现提供了规范,**ApplicationContext**也是由BeanFactory派生而来
+**访问 Spring bean 容器的根接口**, BeanFactory是接口，提供了IOC容器最基本的形式，给具体的IOC容器的实现提供了规范,**ApplicationContext**也是由BeanFactory派生而来
 
 详解:BeanFactory，以Factory结尾，表示它是一个工厂类(接口)， **它负责生产和管理bean的一个工厂**。在Spring中，**BeanFactory是IOC容器的核心接口，它的职责包括：实例化、定位、配置应用程序中的对象及建立这些对象间的依赖。BeanFactory只是个接口，并不是IOC容器的具体实现，但是Spring容器给出了很多种实现，如 DefaultListableBeanFactory、XmlBeanFactory、ApplicationContext等，其中****XmlBeanFactory就是常用的一个，该实现将以XML方式描述组成应用的对象及对象间的依赖关系**。**
 
@@ -529,7 +541,7 @@ Account account = applicationContext.getBean("account");
 
 什么是循环依赖问题: a b相互依赖
 
-说明bean的创建过程,a属性填充时找b,找不到则创建b,创建b时属性填充a,找不到a则创建a,进入循环,形成闭关,在创建b寻找a时,会发现a对象是存在的,但是此时a对象不是一个完整的状态,只是进行了实例化而未进行初始化,所以可以将一个非完整状态优先赋值,等待后续操作完成赋值,相当于提前暴露了某个不完整对象的引用,使得实例化和初始化分开操作,这也是解决循环依赖问题的关键,当所有对象都完成后,还要把对象放入到容器中,此时容器存在对象的几个状态:1已完成实例化但未初始化状态 2完整状态对象,所以使用不同的map容器来储存,一级缓存对应完整状态和二级缓存对应未初始化状态,
+说明bean的创建过程,a属性填充时找b,找不到则创建b,创建b时属性填充a,找不到a则创建a,进入循环,形成闭环,在创建b寻找a时,会发现a对象是存在的,但是此时a对象不是一个完整的状态,只是进行了实例化而未进行初始化,所以可以将一个非完整状态优先赋值,等待后续操作完成赋值,相当于提前暴露了某个不完整对象的引用,使得实例化和初始化分开操作,这也是解决循环依赖问题的关键,当所有对象都完成后,还要把对象放入到容器中,此时容器存在对象的几个状态:1已完成实例化但未初始化状态 2完整状态对象,所以使用不同的map容器来储存,一级缓存对应完整状态和二级缓存对应未初始化状态,
 
 为什么需要三级缓存,三级缓存的类型是ObjectFactory是一个函数式接口,存在的意义是整个容器的运行过程中同名bean对象只能有一个,Spring在bean实例化后，将原始bean放入第三级缓存singletonFactories中，第三级缓存里实际存入的是ObjectFactory接口签名的回调实现。那么如果有动态代理的需求，里面可以埋点进行处理，提前曝光的是ObjectFactory对象，在被注入时才在ObjectFactory方式内实时生成代理对象，并将生成好的代理对象放入到二级缓存earlySingletonObjects中。将原始bean包装后返回。通过第三级缓存我们可以拿到可能经过包装的对象，解决对象代理封装的问题。
 
