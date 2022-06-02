@@ -718,9 +718,50 @@ public void regCourse(int studentId) throws Exception {
 }
 ```
 
+#### restTemplate常见错误
 
+##### 参数类型是 MultiValueMap
 
+问题:
 
+```java
+    @RequestMapping(path = "/rec", method = RequestMethod.POST)
+    public String rec(@RequestParam("p1") String p1, @RequestParam("p2") String p2) {
+        return "hi" + p1 + " " + p2;
+    }
+    
+    @RequestMapping(path = "/send",method = RequestMethod.GET)
+    public void send(){
+        RestTemplate template = new RestTemplate();
+        Map paramMap = new HashMap();
+        paramMap.put("para1", "001");
+        paramMap.put("para2", "002");
+        String url = "http://localhost:8082/rec";
+        String result = template.postForObject(url, paramMap, String.class);
+        System.out.println(result);
+    }
+```
+
+使用```RestTemplate``` 调用接口,使用```HashMap```传递参数,但是调用```rec```时发现接口 400
+
+分析:在使用```map```进行参数组装时,```RestTemplate```发送会以```json```请求体的方式提交参数,但是```rec```接口接受参数的形式并不是以请求体形式接受参数
+
+解决: 使用```MultiValueMap```代替```map```
+
+```java
+@RequestMapping(path = "/send",method = RequestMethod.GET)
+public void send(){
+    RestTemplate template = new RestTemplate();
+    MultiValueMap<String,String> paramMap = new LinkedMultiValueMap();
+    paramMap.add("p1", "001");
+    paramMap.add("p2", "002");
+    String url = "http://localhost:8082/rec";
+    String result = template.postForObject(url, paramMap, String.class);
+    System.out.println(result);
+}
+```
+
+小坑: ```url```参数中含有```#```等特殊字符时,需要```urlencode```,但注意小心多次```encode```
 
 
 
