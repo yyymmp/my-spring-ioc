@@ -403,13 +403,320 @@ public class ElectricService {
 
 解决:保证在事件处理过程中不抛出异常
 
+### spring web
 
+#### 参数校验
 
+##### 对象参数校验无效
 
+问题: 对参数对象进行校验,但未生效
 
+```java
+@RestController
+@Slf4j
+@Validated
+public class HelloController {
+    @RequestMapping(value = "/student", method = RequestMethod.POST)
+    public void student(@RequestBody    Student student){
+        System.out.println(student.toString());
+    }
+}
 
+@Data
+public class Student {
+    @Size(max = 5)
+    private String name;
+    private short age;
+}
+```
 
+分析:要对参数student进行校验,必须匹配下面两个条件之一:
 
+标记了``` org.springframework.validation.annotation.Validated ```注解；
+
+标记了其他类型的注解，且注解名称以 Valid 关键字开头。
+
+但是我们的参数都未满足
+
+解决: 在参数上加上```@Validated```即可
+
+```java
+@RequestMapping(value = "/student", method = RequestMethod.POST)
+public void student(@RequestBody @Validated Student student) {
+    System.out.println(student.toString());
+}
+```
+
+天坑,引包必须是```spring-boot-starter-validation```,否则校验无效
+
+```java
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+```
+
+##### 嵌套参数校验无效
+
+问题:
+
+```java
+@Data
+public class Student {
+    @Size(max = 5)
+    private String name;
+    private short age;
+    private Phone phone;
+}
+
+@Data
+public class Phone {
+    @Size(max = 10)
+    private String number;
+}
+```
+
+此时对number的校验无效
+
+分析:在当前案例代码中，phone 字段并没有被 @Valid 标记，所以关于这个字段信息的 cascading 属性肯定是 false，因此在校验 Student 时并不会级联校验它。
+
+解决:
+
+```java
+@Valid
+private Phone phone;
+```
+
+#### 过滤器常见错误
+
+##### @WebFilter 过滤器无法被自动注入
+
+问题:添加一个过滤器,使用```@WebFilter```注解修饰,统计接口耗时
+
+```java
+@WebFilter
+@Slf4j
+public class MyFilter implements Filter {
+    public MyFilter(){ System.out.println("construct"); }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        log.info("开始计算接口耗时");
+        long start = System.currentTimeMillis();
+        chain.doFilter(request, response);
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        System.out.println("执行时间(ms)：" + time);
+    }
+}
+```
+
+为了让过滤器生效,在启动程序中,我们需要加上扫描注解（即 ```@ServletComponentScan```）让其生效，启动程序如下
+
+```java
+@SpringBootApplication
+@ServletComponentScan
+public class DemoApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+}    
+```
+
+当我们想在某个地方,统计接口耗时时间,将```MyFilter```注入,就会写出以下代码:
+
+```java
+    @Autowired
+    MyFilter myFilter;
+```
+
+此时,项目无法启动```Field myFilter in com.zhehe.controller.HelloController required a bean of type 'com.zhehe.filter.MyFilter' that could not be found.```
+
+分析:因为```MyFilter```并没有作为一个```bean```对象注册到容器中,本质上，过滤器被 ```@WebFilter``` 修饰后，```MyFilter```只会被包装为 ```FilterRegistrationBean```，而 ```TimeCostFilter ```自身，只会作为一个 ```InnerBean ```被实例化，这意味着 ```TimeCostFilter ```实例并不会作为 ```Bean ```注册到容器
+
+解决: 将注入的类型改为```FilterRegistrationBean```,并且指定```bean```名称,便于多个过滤器共存
+
+```java
+    @Autowired
+    @Qualifier("com.zhehe.filter.MyFilter")
+    FilterRegistrationBean myFilter;
+```
+
+##### doFilter 执行多次
+
+问题:添加一个过滤器,使用```component```搭配```fiter```方式添加过滤器
+
+```java
+@Component
+public class DemoFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        try { //模拟异常
+            System.out.println("Filter 处理中时发生异常");
+            throw new RuntimeException();
+        } catch (Exception e) {
+            chain.doFilter(request, response);
+        }
+        chain.doFilter(request, response);
+    }
+}
+```
+
+分析:当抛出异常时,```doFilter```被执行了两次
+
+解决: 删掉```catch```中的调用或者权衡保留一处调用
+
+#### exception常见错误
+
+##### 小心过滤器异常
+
+问题:在过滤器中抛出异常
+
+```java
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        String token = httpServletRequest.getHeader("token");
+        if (!"1".equals(token)) {
+            System.out.println("throw NotAllowException");
+            throw new NotAllException("not allow");
+        }
+        chain.doFilter(request, response);
+    }
+```
+
+全局异常捕获:
+
+```java
+@RestControllerAdvice
+public class NotAllowExceptionHandler {
+    @ExceptionHandler(NotAllException.class)
+    @ResponseBody
+    public String handle() {
+        System.out.println("403");
+        return "{\"resultCode\": 403}";
+    }
+}
+```
+
+过滤器中的异常没有被捕获
+
+分析:过滤器被执行完毕后,才会进入```servlet```相关处理,因此过滤器中的异常无法被统一处理
+
+处理：在过滤器中处理异常，
+
+```java
+@Autowired
+@Qualifier("handlerExceptionResolver")
+private HandlerExceptionResolver resolver;
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        HttpServletResponse httpServletResponse = (HttpServletResponse) response;
+        String token = httpServletRequest.getHeader("token");
+        if (!"1".equals(token)) {
+            System.out.println("throw NotAllowException");
+            resolver.resolveException(httpServletRequest, httpServletResponse, null, new NotAllException("not allow"));
+            //throw new NotAllException("not allow");
+        }
+        chain.doFilter(request, response);
+    }
+```
+
+但这种处理方式,接口还是会被调用一次,但是返回是403
+
+### spring补充
+
+#### Spring Data常见错误 
+
+##### 数据读取与存储的一致性,如redis存取使用的序列化方法保持一致
+
+#### spring 事务常见错误
+
+##### unchecked 异常与事务回滚
+
+问题:
+
+```java
+@Transactional
+public void save() {
+        Student student = new Student();
+        student.setRealname(realname);
+        studentMapper.saveStudent(student);
+        if (student.getRealname().equals("小明")) {
+            throw new Exception("该学生已存在");
+        }
+    }
+}
+```
+
+在事务中抛出```Exception```但是数据依旧被插入
+
+分析:Spring 处理事务的时候，如果没有在 @Transactional 中配置 rollback 属性，那么只有捕获到 RuntimeException 或者 Error 的时候才会触发回滚操作。而我们案例抛出的异常是 Exception，又没有指定与之匹配的回滚规则，所以我们不能触发回滚。
+
+修正:改变异常类型
+
+```java
+    @Transactional
+    public void save() {
+            Student student = new Student();
+            student.setRealname(realname);
+            studentMapper.saveStudent(student);
+            if (student.getRealname().equals("小明")) {
+                throw new RuntimeException("该学生已存在");
+            }
+        }
+    }
+```
+
+##### 试图给 private 方法添加事务
+
+问题:private方法的事务未生效
+
+分析:只有当注解为事务的方法被声明为 public 的时候，才会被 Spring 处理。
+
+```@Transactional(rollbackFor = Exception.class, noRollbackFor = RuntimeException.class)```
+
+##### 嵌套事务回滚失败
+
+问题: 在一个外部事务中,嵌套调用内部事务,并对该事务进行异常捕获,期望内部事务异常回滚,但外部事务正常执行
+
+```java
+
+  // 外层事务
+  @Transactional(rollbackFor = Exception.class)
+  public void saveStudent(String realname) throws Exception {
+      //......省略逻辑代码.....
+      studentService.doSaveStudent(student);
+      try {
+        // 嵌套的内层事务
+        @Transactional(rollbackFor = Exception.class)
+        public void regCourse(int studentId) throws Exception {
+          //......省略逻辑代码.....
+        }
+      } catch (Exception e) {
+          e.printStackTrace();
+      }
+  }
+```
+
+regCourse中抛出异常,事务回滚,但saveStudent也一起回滚了
+
+分析:spring默认的传播机制当前有事务,加入当前事务,没有事务则新建事务,所以在当前外部事务和内部事务共用一个事务,所以一起回滚
+
+解决:修改内部事务的传播级别,新开一个事务
+
+```java
+
+@Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
+public void regCourse(int studentId) throws Exception {
+    studentCourseMapper.saveStudentCourse(studentId, 1);
+    courseMapper.addCourseNumber(1);
+    throw new Exception("注册失败");
+}
+```
 
 
 
