@@ -58,7 +58,7 @@ public class BeanFactory {
 配置文件:在配置文件中定义好实现类
 
 ```properties
-helloDao=com.myspring.dao.HelloDaoImpl
+helloDao=HelloDaoImpl
 ```
 
 在工厂类中读取该配置文件利用反射生成对象
