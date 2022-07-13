@@ -10,6 +10,32 @@ set: 抽奖小程序(随机抽取set)     立即参与抽奖(加入set)   点赞
 
 zset: 排行榜
 
+### string底层结构
+
+int :当可以转为int时,则存储为int类型存储
+
+embstr:不可转为int且字符串长度小于44 则为str
+
+row类型:大于44字节时,变成row类型
+
+### list底层结构
+
+quicklist(双端链表)和ziplist作为底层实现 ziplist: 与普通链表不同的是,他们是不仅存储前一个节点的地址,也会连续存储
+
+### set底层结构
+
+数据可以使用整形表示时,则使用intset类型
+
+无法使用整形表示时使用hashtable
+
+### hash底层结构
+
+采用字典存储 数据量较小时 使用ziplist存储 hash是怎么用list处理呢,其实是将一对key-value(一个entry)当作一个值来处理
+![avatar](img/ziplist.jpg)
+
+数据量变大时(512),使用hashtable
+
+
 ### zset底层实现原理
 
 有序集合对象的编码可以是ziplist或者skiplist,即压缩链表或者跳表
