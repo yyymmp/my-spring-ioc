@@ -15,8 +15,13 @@ public class Client {
         director.construct(benzBuilder);
 
         ProductCar car = benzBuilder.builder();
-
         System.out.println(car);
+
+        //重置建造者
+        QQBuilder qqBuilder = new QQBuilder();
+        director.construct(qqBuilder);
+        ProductCar builder = qqBuilder.builder();
+        System.out.println(builder);
 
     }
 }
