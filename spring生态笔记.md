@@ -814,3 +814,61 @@ org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration,\
 
 **从classpath中搜寻所有的 META-INF/spring.factories 配置文件，并将其中org.springframework.boot.autoconfigure.EnableutoConfiguration 对应的配置项通过反射实例化为对应的标注了@Configuration的JavaConfig形式的IoC容器配置类，然后汇总为一个并加载到IoC容器。**
 
+
+
+### spring启动流程
+
+主要在resresh中体现
+
+1 prepareRefresh: 容器刷新前的预处理工作
+
+这一步创建和准备了 Environment 对象，它作为 ApplicationContext 的一个成员变量
+
+* systemProperties - 保存 java 环境键值
+* systemEnvironment - 保存系统环境键值
+* 自定义 PropertySource - 保存自定义键值，例如来自于 *.properties 文件的键值
+
+2 obtainFreshBeanFactory: 这一步获取（或创建） BeanFactory，它也是作为 ApplicationContext 的一个成员变量, 这一步包含了bean定义信息的解析,所有的 BeanDefinition 会存入 BeanFactory 中的 beanDefinitionMap 集合,BeanDefinition 如何获取,可以通过xml,配置类,组件扫描
+
+3 prepareBeanFactory:这一步会进一步完善 BeanFactory，为它的各项成员变量赋值
+
+如类型转化器 可以解析${},SpEL表达式,还有beanPostProcessors中的ApplicationContextAwareProcessor 用来解析 Aware 接口等等
+
+4 postProcessBeanFactory : 空的实现,留给子类扩展 模板方法设计模式
+
+5 invokeBeanFactoryPostProcessors:对beanFactory 进行扩展, 这一步会调用 beanFactory 后处理器，充当 beanFactory 的扩展点，可以用来补充或修改 BeanDefinition,此处是对bean工厂后置处理器对整个工厂做功能增强
+
+常见的 beanFactory 后处理器有ConfigurationClassPostProcessor – 解析 @Configuration、@Bean、@Import、@PropertySource 等
+
+MapperScannerConfigurer – 补充 Mapper 接口对应的 BeanDefinition
+
+6 registerBeanPostProcessors:加入更多bean后置处理器,从beanDefinitionMap 寻找实现了BeanPostProcessors的bean后置处理器,有的是解析Autowired注解,有的是解析Resource注解,有的是创建代理
+
+比如AutowiredAnnotationBeanPostProcessor 功能有：解析 @Autowired，@Value 注解,CommonAnnotationBeanPostProcessor 功能有：解析 @Resource，@PostConstruct，@PreDestroy
+
+7  initMessageSource:这一步回到ApplicationContext ,是为 ApplicationContext 添加 messageSource 成员，实现国际化功能 去 beanFactory 的beanDefinitionMap 内找名为 messageSource 的 bean，如果没有，则提供空的 MessageSource 实现,即不支持
+
+8 initApplicationContextEventMulticaster:初始化事件广播器,先去beanDefinitionMap 中寻找,如果没有则提供一个默认实现,为后面的发布-监听做准备 ,用来发布事件给监听器
+
+9 onrefresh:空实现,留给子类扩展,比如boot中创建webserver,即内嵌web容器
+
+10 registerListeners:注册监听器,从哪来,从编程添加,或者在beanDefinitionMap 中含有实现了applicationListener的接口找出来加入
+
+11 fnishBeanFactoryInitialization:这一步会将 beanFactory 的成员补充完毕，并初始化所有非延迟单例 bean,bean的生命周期也是从这里开始
+
+12 finishRefresh**: 这一步会为 ApplicationContext 添加 lifecycleProcessor 成员，用来控制容器内需要生命周期管理的 bean如果容器中有名称为 lifecycleProcessor 的 bean 就用它，否则创建默认的生命周期管理器
+
+发布 ContextRefreshed 事件，整个 refresh 执行完成
+
+### springbean的生命周期
+
+容器启动->实例化bean->属性填充(依赖注入),puplatbean->检查是否实现一些aware相关接口,比如set如果有,则调用->beanpostprocessor前置处理器->有没有实现初始化接口initializeBean->有没有配置自定义的init_method->beanPostprocessor后置处理器,如果有aop需求,也是在这一步处理->注册一些回调接口->使用->销毁,销毁时是否实现一些接口和自定义的方法destory-method
+
+
+
+
+
+### 关于项目
+
+
+
