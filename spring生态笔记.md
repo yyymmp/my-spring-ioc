@@ -19,7 +19,7 @@ public HelloService helloService = new HelloServiceImpl();
 在service中,需要手动创建dao对象
 
 ```java
-public HelloDao helloDao = new HelloDao();		
+public HelloDao helloDao = new HelloDao();
 ```
 
 当需求发生变更的时候(比如数据库变更,比如换了一个数据源)，可能需要频繁修改 Java 代码，效率很低，如何解决？
@@ -73,7 +73,7 @@ helloDao=HelloDaoImpl
             ioException.printStackTrace();
         }
     }
-    
+
     public static Object getDao() {
         //拿到全限定类名
         String val = properties.getProperty("helloDao");
@@ -172,7 +172,7 @@ public class Account {
 测试:
 
 ```java
-        //传入被扫描的包  
+        //传入被扫描的包
         ApplicationContext applicationContext = new AnnotationConfigApplicationContext("com.myspring.spring.entity");
 
         System.out.println(applicationContext.getBean("account"));
@@ -311,7 +311,7 @@ try {
 
 #### Spring 实现控制反转ioc的大概思路:
 
-首先,传入配置类或者xml配置文件,这里以配置类为例,配置类上面配置了要扫描的包compontScan,所以得到该包名,扫描该包下的所有.class文件, 
+首先,传入配置类或者xml配置文件,这里以配置类为例,配置类上面配置了要扫描的包compontScan,所以得到该包名,扫描该包下的所有.class文件,
 
 通过**应用类加载器**加载加载得到class对象,然后构造出beanDefintion对象,里面可简单**描述bean的定义**,如scope,是否单例还是原型,class对象,一个beanDefintion就是对一个bean的定义描述,
 
@@ -327,7 +327,7 @@ try {
 
 ```java
    public void setBeanName(String beanName) {
-        //ID保存BeanName的值	
+        //ID保存BeanName的值
         id=beanName;
     }
 ```
@@ -336,7 +336,7 @@ try {
 
 ```java
     public void afterPropertiesSet() throws Exception {
-        System.out.println("ceshi InitializingBean");        
+        System.out.println("ceshi InitializingBean");
     }
 ```
 
@@ -349,7 +349,7 @@ public interface BeanPostProcessor {
     default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
         return bean;
     }
-	
+
     //初始化后
     @Nullable
     default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
@@ -381,16 +381,24 @@ springAop实现,也是利用BeanPostProcessor实现的,在初始化后方法(创
 
 bean创建的生命周期:
 
-class对象(A.class)------->推断构造方法(存在多个构造方法时)--->实例化-->对象
+class对象(A.class)------->推断构造方法(存在多个构造方法时)--->实例化-->普通对象
 
 ---->属性填充(依赖注入)
 
------>初始化(afterPropertiesSet方法,属性填充之后执行),不关心该方法具体内容,只是调用,具体逻辑由程序员决定,通常可以用来验证填充的属性是否符合要求
+---->初始化前(@PostConstruct)
 
------>aop
+----->初始化(实现InitialBean重写afterPropertiesSet方法,属性填充之后执行),不关心该方法具体内容,只是调用,具体逻辑由程序员决定,通常可以用来验证填充的属性是否符合要求
+
+----->是否需要进行aop(初始化后) 代理对象
 
 ---->Bean对象
+#### 什么是先byType在byName
+在一个类含有多个构造器时,使用@autowired注解修饰类构造器可以告诉spring使用什么构造器进行实例对象
+在指定spring的构造方法中,如果需要传值,spring如何去寻找入参  根据bean类型去找,但同一个类型可能会有多个实例,此时spring会根据传入参数作为bean的名字再次筛选
+也就是先byType,再byName
 
+springAop实现:
+生成代理对象,并将目标对象对象赋值给代理对象的target属性,在调用被代理对象方法时还是使用target去调用,且被代理对象在创建过程中属性依赖注入,但代理对象没有
 源码流程：
 
 核心方法：doCreateBean
@@ -418,7 +426,7 @@ class对象(A.class)------->推断构造方法(存在多个构造方法时)--->�
 		try {
              //填充属性  实现autowired功能
 			populateBean(beanName, mbd, instanceWrapper);
-             //执行初始化方法  和 beanPostPrecessor 正常aop 
+             //执行初始化方法  和 beanPostPrecessor 正常aop
 			exposedObject = initializeBean(beanName, exposedObject, mbd);
 		}
 ```
@@ -445,7 +453,7 @@ protected Object initializeBean(String beanName, Object bean, @Nullable RootBean
    }
 
    try {
-       
+
       //初始化方法  判断是否实现初始化接口然后实现afterPropertiesSet 该方法内部调用afterPropertiesSet方法  ((InitializingBean) bean).afterPropertiesSet();
       invokeInitMethods(beanName, wrappedBean, mbd);
    }
@@ -455,7 +463,7 @@ protected Object initializeBean(String beanName, Object bean, @Nullable RootBean
             beanName, "Invocation of init method failed", ex);
    }
    if (mbd == null || !mbd.isSynthetic()) {
-       
+
       //初始化后 aop入口  判断是否需要进行aop 若需要aop 则返回代理对象 若不需要 则直接返回当前创建的bean对象
       wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
    }
@@ -505,7 +513,7 @@ protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) 
    Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
    if (specificInterceptors != DO_NOT_PROXY) {
       this.advisedBeans.put(cacheKey, Boolean.TRUE);
-       //创建代理对象  jdk或cglib 
+       //创建代理对象  jdk或cglib
       Object proxy = createProxy(
             bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
       this.proxyTypes.put(cacheKey, proxy.getClass());
@@ -549,6 +557,116 @@ Account account = applicationContext.getBean("account");
 
 在实际使用中，要获取一个bean，先从一级缓存一直查找到三级缓存，缓存bean的时候是从三级到一级的顺序保存，并且缓存bean的过程中，三个缓存都是互斥的，只会保持bean在一个缓存中，而且，最终都会在一级缓存中。
 
+AService
+1 创建一个AService普通对象-->map（beanName,AService普通对象）
+2 填充bService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+
+
+BService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService --> map（beanName,AService普通对象），找到，返回 --> 找不到转去创建AService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+
+此时使用一个map在AService第一步后保存AService普通对象，就可以解决循环依赖，由此可见两级缓存时可以解决循环依赖的，但是有缺陷
+若此时AService需要进行AOP，那么BService的属性aService其实是AService普通对象，但AService对象最后会经过第五步aop放入单例池中的是代理对象 正确做法应该是将代理对象赋值给BService的属性
+面对aop，应该如何解决？
+当出现循环依赖时，我们提前aop，将aop的代理对象放入map中，这样在创建BService对象时填充aService属性也就是代理对象 如下面步骤：
+AService
+0 creatingSet('aService')
+1 创建一个AService普通对象-->--->提前aop-->AService代理对象-->map（beanName,AService代理对象）
+2 填充bService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+
+BService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 --> 提前aop -->aService代理对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+如果这样设计，如果此时再有一个CService与A循环依赖
+AService
+0 creatingSet('aService')
+1 创建一个AService普通对象-->--->提前aop-->AService代理对象-->map（beanName,AService代理对象）
+2 填充bService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+2 填充cService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+BService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 --> 提前aop -->aService代理对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+CService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 --> 提前aop -->aService代理对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+那么在CService填充aService属性。又去进行一次aop，又得到一个aService代理对象，不符合单例bean
+这种情况怎么处理，使用第二级缓存，如下图：
+AService
+0 creatingSet('aService')
+1 创建一个AService普通对象-->--->提前aop-->AService代理对象-->map（beanName,AService代理对象）
+2 填充bService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+2 填充cService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+BService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 --> 提前aop -->aService代理对象 -->二级缓存
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+CService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 -->二级缓存寻找-->拿到aService代理对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+在这里看见二级缓存可以保证一个对象多次循环依赖时对象单例，重复创建
+
+到现在位置，我们还是只用了两级缓存，那为什么需要三级缓存呢，因为在上方提前aop中，无法获取原普通对象， 所以在实例化普通对象后，将bean信息存入一个三级缓存
+AService
+0 creatingSet('aService')
+1 创建一个AService普通对象-->三级缓存map（beanName,lambda(AService普通对象+beanDefinition））
+2 填充bService属性--> 去单例池中寻找BService  --> 找不到转去创建BService的对象
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+BService
+1 创建一个AService普通对象
+2 填充aService属性--> 去单例池中寻找AService -->creatingSet--> 出现循环依赖 --> 二级缓存-->三级缓存获取lambda执行--> 提前aop -->aService代理对象 -->二级缓存
+3 填充其他属性
+4 其他操作
+5 初始化后（aop）
+6 放入单例池
+tip:在创建BService实例时，已经对AService对象提前进行了aop，那么在AService的第五步还会进行aop吗 其实时不会的，在提前aop时会在一个map放置一个标记，再次aop时会执行判断
+
+
+一级缓存：完整状态bean
+二级缓存：实例化但未初始化bean
+三级缓存：
 
 
 #### sping事务传播级别
@@ -620,11 +738,11 @@ public class Account {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
-    
+
     //从spring中将自己注入 但此时是spring创建bean之后的代理对象 代理对象调用a方法时,a()方法上面的注解就会生效了
     @Autowired
     private Account account;
-    
+
     @Transactional
     public void test() {
         jdbcTemplate.execute("insert into age value(1,2)");
@@ -649,11 +767,11 @@ public void test() {
     a();
 }
 
-    @Transactional
-    public void a() {
-        jdbcTemplate.execute("insert into age value(2,2)");
-        throw new NullPointerException();
-    }
+@Transactional
+public void a() {
+    jdbcTemplate.execute("insert into age value(2,2)");
+    throw new NullPointerException();
+}
 }
 ```
 
@@ -764,10 +882,24 @@ Servlet 容器首先接待了这个请求，并将该请求委托给 `Dispatcher
 
 ### springboot
 
-三大注解:
+### springboot自动装配
+
+主要有三个注解:
+
+- `@SpringBootConfiguration`：我们点进去以后可以发现底层是**Configuration**注解，说白了就是支持**JavaConfig**的方式来进行配置(**使用Configuration配置类等同于XML文件**)。
+- `@EnableAutoConfiguration`：开启**自动配置**功能(后文详解)
+- `@ComponentScan`：这个注解，学过Spring的同学应该对它不会陌生，就是**扫描**注解，默认是扫描**当前类下**的package。将`@Controller/@Service/@Component/@Repository`等注解加载到IOC容器中。
+
+其中EnableAutoConfiguration又被以下两个注解修饰
+
+- `@AutoConfigurationPackage`：自动配置包,主配置类(@SpringBootApplication)的所在包及其子包里边的组件扫描到Spring容器中。这里会有疑问,会不会觉得，这不就是ComponentScan的功能吗？这俩不就重复了吗？比如说，你用了Spring Data JPA，可能会在实体类上写`@Entity`注解。这个`@Entity`注解由`@AutoConfigurationPackage`扫描并加载，而我们平时开发用的`@Controller/@Service/@Component/@Repository`这些注解是由`ComponentScan`来扫描并加载的。这二者**扫描的对象是不一样**的
+
+- `@Import`：给IOC容器导入组件,核心方法是getCandidateConfigurations,通过SpringFactoriesLoader来加载,扫描所有jar包下META-INF/spring.factories,将其文件包装成Properties对象,Properties对象获取到key值为`EnableAutoConfiguration`的数据，然后添加到容器里边。会有一些默认加载类和一些导入的start,并且在oncondition判断下是否加载到容器
+
+
 
 ```java
-@Configuration:配置类 
+@Configuration:配置类
 @EnableAutoConfiguration:启用 SpringBoot 的自动配置机制
 @ComponentScan:扫描被@Component (@Service,@Controller)注解的 bean，注解默认会扫描该类所在的包下所有的类。
 ```
@@ -783,7 +915,7 @@ EnableAutoConfiguration 主要有
 
 ```java
 /**
- * 核心方法，加载spring.factories文件中的 
+ * 核心方法，加载spring.factories文件中的
  * org.springframework.boot.autoconfigure.EnableAutoConfiguration 配置类
  */
 protected List<String> getCandidateConfigurations(AnnotationMetadata metadata,
